@@ -9,7 +9,7 @@
 ![차량 화면과 받는 사람 휴대폰 화면](assets/screenshots/01-overview.jpg)
 <sub>왼쪽: Pleos Connect 차량 화면 (공유 중 · 링크 확인 · 나갈 타이밍 알림 보냄) / 오른쪽: 받는 사람 휴대폰 웹 (앱 설치 없이 링크로 열기)</sub>
 
-**바로 가기:** [픽업 한 번의 흐름](#픽업-한-번의-흐름) · [심사 포인트](#심사-포인트) · [1분 만에 실행해 보기](#가장-빠르게-보기-1분-에뮬레이터-없이) · [코드 구조 (ARCHITECTURE.md)](ARCHITECTURE.md)
+**바로 가기:** [픽업 한 번의 흐름](#픽업-한-번의-흐름) · [핵심 설계](#핵심-설계) · [1분 만에 실행해 보기](#가장-빠르게-보기-1분-에뮬레이터-없이) · [코드 구조 (ARCHITECTURE.md)](ARCHITECTURE.md)
 
 ---
 
@@ -27,15 +27,14 @@
 
 ---
 
-## 심사 포인트
+## 핵심 설계
 
-| 기준 | 나온나에서 | 근거 (코드) |
+| 무엇을 | 어떻게 | 코드 |
 |---|---|---|
 | **차량 특화** | 기어(P)·문(조수석·뒷문)·계기판 경고등(비상등)으로 도착·탑승·비상등을 **운전자 조작 없이** 감지. 장소가 바뀌면 Pleos 내비 경로를 바로 다시 설정 | [`CarSignals.kt`](nowonna/car-app/app/src/main/java/ai/nowonna/car/CarSignals.kt) — Vehicle SDK · NaviHelper SDK |
 | **주행 중 안전** | 주행 중엔 큰 버튼 한 번 탭만. 승인 카드는 10초 뒤 자동 유지, 설정은 기어 P일 때만. 차량은 **읽기만** 하고 제어하지 않음 | [`C3Screen.kt`](nowonna/car-app/app/src/main/java/ai/nowonna/car/C3Screen.kt), [`Pickup.kt`](nowonna/car-app/app/src/main/java/ai/nowonna/car/Pickup.kt) |
 | **쓰기 쉬움** | 받는 사람은 **앱 설치·가입 없이 링크 하나**. 장소 검색, 나갈 타이밍, 휴대폰 알림 | [`web/index.html`](nowonna/server-lite/web/index.html) |
 | **개인정보** | 16자리 무작위 링크 · 2시간 자동 만료 · 탑승하면 위치 즉시 삭제 · 차량 전용 비밀키 · 처리방침 페이지 | [`server.js`](nowonna/server-lite/server.js), [`privacy.html`](nowonna/server-lite/web/privacy.html) |
-| **바로 실행** | 외부 패키지 없는 Node 서버 + 테스트용 차량으로 1분 안에 전체 흐름 확인. 에뮬레이터용 모의 주행 내장 | [실행해 보기](#실행해-보기-실제-차-없이) |
 
 ---
 
