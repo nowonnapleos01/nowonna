@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>개인정보 처리방침 · 나온나</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  :root { --bg: #F3F4F6; --surface: #FFFFFF; --card: #ECEEF1; --line: #DDE1E6; --ink: #11151B; --sub: #5B6472; --faint: #8A94A3; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #0E1115; --surface: #171B21; --card: #1D232B; --line: #2A313A; --ink: #EEF1F5; --sub: #A9B2BF; --faint: #7C8694; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
+    line-height: 1.65; -webkit-text-size-adjust: 100%; word-break: keep-all; }
+  main { max-width: 680px; margin: 0 auto; padding: calc(32px + env(safe-area-inset-top)) 16px 48px; }
+  h1 { font-size: 28px; letter-spacing: -0.6px; margin: 0 0 6px; }
+  .date { color: var(--faint); font-size: 14px; margin: 0 0 24px; }
+  .lead { color: var(--sub); font-size: 16px; margin: 0 0 28px; }
+  h2 { font-size: 18px; margin: 32px 0 10px; }
+  p, li { font-size: 15px; }
+  ul { padding-left: 20px; margin: 8px 0; }
+  .table { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 14px; overflow: hidden; font-size: 14px; }
+  th, td { text-align: left; padding: 11px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--card); font-weight: 700; border-top: 0; white-space: nowrap; }
+  .note { background: var(--card); border-radius: 14px; padding: 14px 16px; font-size: 14px; color: var(--sub); margin-top: 32px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>개인정보 처리방침</h1>
+  <p class="date">시행일 2026년 11월 7일</p>
+  <p class="lead">나온나는 픽업하는 동안에만 필요한 정보를 쓰고, 픽업이 끝나면 지웁니다. 회원가입이 없고, 받는 사람은 앱을 설치하지 않습니다.</p>
+
+  <h2>1. 처리하는 정보</h2>
+  <div class="table">
+  <table>
+    <tr><th>누구의</th><th>어떤 정보</th><th>왜</th></tr>
+    <tr><td>운전자</td><td>차 위치·진행 방향, 도착까지 남은 시간·거리, 도착·탑승 상태, 비상등 켜짐 여부</td><td>받는 사람에게 차가 오는 모습과 도착 시간을 보여 주기 위해</td></tr>
+    <tr><td>운전자</td><td>표시 이름(별칭), 차종·색상·번호판</td><td>받는 사람이 차를 알아보기 위해 (등록한 경우만)</td></tr>
+    <tr><td>받는 사람</td><td>이름, 전화번호 (운전자가 차량에 연결된 휴대폰 연락처에서 고름)</td><td>픽업 링크를 보내기 위해. 전화번호는 웹 화면에 보여 주지 않습니다</td></tr>
+    <tr><td>받는 사람</td><td>고른 만날 장소·한마디, 탑승 후 목적지, 장소 검색어, 링크를 연 시각</td><td>장소 변경 요청과 운전자 내비 안내, '링크 확인' 표시를 위해</td></tr>
+    <tr><td>받는 사람 (선택)</td><td>내 위치 ([내 위치] 버튼을 누른 경우만)</td><td>만날 곳까지 걸어서 걸리는 시간을 계산하기 위해. 운전자에게 보내지 않습니다</td></tr>
+  </table>
+  </div>
+
+  <h2>2. 보관 기간과 삭제</h2>
+  <ul>
+    <li>정보는 픽업이 진행되는 동안에만 서버 메모리에 있고, 별도 데이터베이스에 쌓지 않습니다.</li>
+    <li>탑승이 감지되거나 운전자가 공유를 끝내면, 또는 시작 후 <b>2시간</b>이 지나면 링크가 만료되고 차 위치·비상등·받는 사람 전화번호·내 위치 계산 값을 <b>즉시</b> 지웁니다.</li>
+    <li>"공유가 끝났어요" 화면에 필요한 나머지 값(장소 이름, 상태, 시각)은 종료 후 <b>24시간</b>이 지나면 모두 지웁니다.</li>
+    <li>서버 운영 기록에는 픽업 번호와 장소 이름만 남고, 이름·전화번호·한마디는 남기지 않습니다.</li>
+  </ul>
+
+  <h2>3. 외부에 전달하는 정보</h2>
+  <p>나온나는 정보를 팔거나 광고에 쓰지 않습니다. 기능을 위해 아래 서비스에 필요한 값만 보냅니다.</p>
+  <ul>
+    <li><b>SK open API (TMAP)</b>: 지도 표시, 경로·도보 시간 계산, 주소 찾기, 장소 검색을 위해 좌표와 검색어를 보냅니다.</li>
+    <li><b>문자 발송 서비스</b>: 실서비스에서 픽업 링크를 문자로 보낼 때 받는 사람 전화번호를 보냅니다. (현재 시연 버전은 문자를 보내지 않습니다)</li>
+    <li>지도와 글꼴 파일은 브라우저가 TMAP·jsDelivr·unpkg 서버에서 직접 불러옵니다.</li>
+  </ul>
+
+  <h2>4. 이용자가 할 수 있는 것</h2>
+  <ul>
+    <li>운전자는 차량 화면에서 언제든 공유를 끝낼 수 있고, 끝나는 즉시 위 정보가 지워집니다.</li>
+    <li>받는 사람은 위치 권한을 허용하지 않아도 모든 기능을 쓸 수 있습니다 (걸어서 걸리는 시간만 빠집니다).</li>
+    <li>차량 앱은 차량 상태를 읽기만 하고, 차를 제어하지 않습니다.</li>
+  </ul>
+
+  <p class="note">나온나는 현대자동차그룹 차량용 앱 개발 공모전 출품작이며, 이 방침은 시연 버전 기준입니다. 정식 서비스 전에는 개인정보 보호책임자와 문의처를 정해 이 페이지에 알립니다.</p>
+</main>
+</body>
+</html>

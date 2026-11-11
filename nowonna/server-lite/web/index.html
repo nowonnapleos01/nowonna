@@ -1,0 +1,1192 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#F3F4F6">
+<title>나온나</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<!-- 지도 SDK: 서버가 끼워 넣어요 (앱키가 있으면 TMAP, 없으면 개발용 Leaflet + OpenStreetMap) -->
+<!--MAP_SDK-->
+<style>
+  /* 디자인 토큰: design/tokens.json (웹 = 라이트) */
+  :root {
+    --bg: #F3F4F6; --surface: #FFFFFF; --card: #ECEEF1; --line: #DDE1E6;
+    --ink: #11151B; --sub: #5B6472; --faint: #8A94A3;
+    --amber: #FFB224; --amber-ink: #2A1A00; --amber-text: #B97800; --amber-soft: #FFE3A8;
+    --mint: #2FD39A; --mint-text: #12895F; --mint-soft: #DDF6EC;
+    --coral: #FF6B5A; --coral-text: #D9412F; --coral-soft: #FDE7E4;
+    --route: #4DA3FF;
+    --sheet-r: 28px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+    font-feature-settings: "tnum"; -webkit-font-smoothing: antialiased; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* 지도 */
+  #map { position: fixed; inset: 0; background: #E9ECEF; }
+  .leaflet-tile-pane { filter: grayscale(.9) brightness(1.06) contrast(.88); }
+  .leaflet-control-attribution { background: rgba(255,255,255,.7) !important; color: #8A94A3 !important; font-size: 10px; }
+  .leaflet-control-attribution a { color: #5B6472 !important; }
+  .car-pin { width: 44px; height: 44px; border-radius: 50%; background: var(--route); border: 3px solid #fff;
+    box-shadow: 0 0 0 10px rgba(77,163,255,.22), 0 6px 14px rgba(17,21,27,.25); position: relative; }
+  .car-pin svg { position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; transition: transform .4s; }
+  .place-pin { width: 44px; height: 44px; border-radius: 50% 50% 50% 6px; transform: rotate(-45deg); background: var(--amber);
+    display: grid; place-items: center; box-shadow: 0 6px 14px rgba(17,21,27,.28); }
+  .place-pin b { transform: rotate(45deg); font-weight: 900; font-size: 19px; color: var(--amber-ink); }
+  .me-pin { width: 18px; height: 18px; border-radius: 50%; background: var(--mint); border: 3px solid #fff;
+    box-shadow: 0 0 0 9px rgba(47,211,154,.25); }
+
+  /* 가운데 고정 핀 (장소 고르기) */
+  #centerPin { position: fixed; left: 50%; z-index: 500; pointer-events: none; transform: translate(-50%, -100%); transition: top .2s; }
+  #centerPin .place-pin { background: var(--coral); }
+  #centerPin .place-pin b { color: #fff; }
+  #centerPin.next .place-pin { background: var(--ink); }
+  #centerPin::after { content: ''; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 4px; margin-left: -5px;
+    border-radius: 50%; background: rgba(17,21,27,.3); }
+
+  .fab { position: fixed; right: 16px; z-index: 600; width: 52px; height: 52px; border-radius: 16px; border: 0; background: var(--surface);
+    box-shadow: 0 4px 14px rgba(17,21,27,.14); display: grid; place-items: center; cursor: pointer; transition: bottom .2s; }
+
+  /* 아래 시트 */
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 700; max-width: 480px; margin: 0 auto;
+    background: var(--surface); border-radius: var(--sheet-r) var(--sheet-r) 0 0;
+    padding: 12px 20px calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(17,21,27,.10); }
+  .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 14px; }
+  .lead { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; color: var(--amber-text); margin-bottom: 6px; }
+  .lead.warn { color: var(--coral-text); }
+  .tri { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--amber); display: grid; place-items: center; }
+  .tri::before { content: ''; width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid var(--amber-ink); margin-top: -2px; }
+  .lead.warn .tri { background: var(--coral); }
+  .lead.warn .tri::before { border-bottom-color: #fff; }
+  .eta { display: flex; align-items: baseline; gap: 8px; margin: 0 0 14px; }
+  .eta b { font-size: 48px; font-weight: 800; line-height: 1.05; letter-spacing: -1.5px; }
+  .eta span { font-size: 18px; font-weight: 600; color: var(--sub); }
+  h1 { font-size: 27px; line-height: 1.3; letter-spacing: -.6px; margin: 4px 0 8px; font-weight: 800; }
+  .desc { color: var(--sub); font-size: 15px; line-height: 1.5; margin: 0 0 14px; }
+
+  .card { display: flex; align-items: center; gap: 14px; background: var(--card); border-radius: 18px; padding: 14px 16px; margin-bottom: 10px; }
+  .card .ic { flex: none; width: 44px; height: 44px; border-radius: 12px; background: var(--surface); display: grid; place-items: center; }
+  .card .tx { flex: 1; min-width: 0; }
+  .card .t { font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .s { font-size: 14px; color: var(--sub); margin-top: 1px; }
+  .card .mini { flex: none; font: inherit; font-size: 14px; font-weight: 700; background: var(--ink); color: #fff; border: 0; border-radius: 12px; padding: 9px 14px; cursor: pointer; }
+  #pushCard.on .ic { background: var(--mint-soft); }
+  .card .link { flex: none; font-size: 14px; font-weight: 600; color: var(--faint); background: none; border: 0; padding: 6px; cursor: pointer; font-family: inherit; }
+  .chip { flex: none; font-size: 13px; font-weight: 700; padding: 5px 10px; border-radius: 9px; }
+  .chip.coral { background: var(--coral-soft); color: var(--coral-text); }
+  .chip.mint { background: var(--mint-soft); color: var(--mint-text); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber-text); }
+  .tag { display: inline-block; font-size: 15px; font-weight: 700; padding: 6px 12px; border-radius: 10px; margin-bottom: 8px; }
+  .tag.mint { background: var(--mint-soft); color: var(--mint-text); }
+
+  button.btn { height: 58px; border-radius: 18px; border: 0; font-size: 18px; font-weight: 800; font-family: inherit; cursor: pointer; width: 100%; }
+  .btn.primary { background: var(--amber); color: var(--amber-ink); }
+  .btn.dark { background: var(--ink); color: #fff; }
+  .btn.ghost { background: var(--surface); color: var(--ink); border: 1.5px solid var(--line); }
+  .btn.soft { background: var(--card); color: var(--ink); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 10px; margin-top: 4px; }
+  /* 알림 받을 시점 (받는 사람이 고름) */
+  .notify { display: flex; align-items: center; gap: 10px; background: var(--card); border-radius: 18px; padding: 10px 12px 10px 16px; margin-bottom: 10px; }
+  .notify .lb { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .notify .seg { display: flex; gap: 6px; }
+  .notify .seg button { font: inherit; font-size: 14px; font-weight: 700; white-space: nowrap; border: 0; border-radius: 10px; padding: 8px 11px; background: var(--surface); color: var(--sub); cursor: pointer; }
+  .notify .seg button.on { background: var(--ink); color: #fff; }
+  .row > * { flex: 1; }
+
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 12px; }
+  .pill { height: 42px; padding: 0 16px; border-radius: 21px; border: 1.5px solid var(--line); background: var(--surface);
+    font-size: 15px; font-weight: 700; font-family: inherit; color: var(--ink); cursor: pointer; }
+  .pill.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  input { width: 100%; height: 50px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink);
+    padding: 0 14px; font-size: 16px; font-family: inherit; margin-bottom: 10px; outline: none; }
+  input:focus { border-color: var(--ink); }
+  .meta { display: flex; justify-content: space-between; align-items: center; background: var(--card); border-radius: 14px;
+    padding: 12px 16px; margin-bottom: 12px; font-size: 15px; font-weight: 700; }
+  .meta em { font-style: normal; color: var(--coral-text); flex: none; margin-left: 10px; }
+  .meta span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .note { color: var(--faint); font-size: 13px; text-align: center; margin: 10px 0 0; }
+  .search { position: relative; }
+  .search input { padding-left: 42px; }
+  .search svg { position: absolute; left: 14px; top: 15px; width: 20px; height: 20px; color: var(--faint); pointer-events: none; }
+  .results { max-height: 248px; overflow-y: auto; margin: -4px 0 12px; border-radius: 14px; background: var(--surface); border: 1.5px solid var(--line); }
+  .results button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; border: 0; background: none;
+    font-family: inherit; text-align: left; color: var(--ink); cursor: pointer; border-top: 1px solid var(--line); }
+  .results button:first-child { border-top: 0; }
+  .results button:active { background: var(--card); }
+  .results .t { flex: 1; min-width: 0; }
+  .results .n { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .results .a { font-size: 13px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+  .results .d { flex: none; font-size: 13px; color: var(--faint); }
+  .results .empty { padding: 14px; font-size: 14px; color: var(--sub); text-align: center; }
+
+  /* W5 차 찾기 카드 */
+  .find { background: var(--ink); color: #fff; border-radius: 24px; padding: 26px 20px 20px; text-align: center; margin-bottom: 12px; }
+  .carfront { position: relative; width: 190px; height: 92px; margin: 0 auto 18px; background: #EEF1F4; border-radius: 30px 30px 20px 20px; }
+  .carfront .glass { position: absolute; left: 18px; right: 18px; top: 8px; height: 36px; border-radius: 14px; background: #2B3445; }
+  .carfront .lamp { position: absolute; top: 52px; width: 54px; height: 12px; border-radius: 6px; background: #C9CFD6; }
+  .carfront .lamp.l { left: -8px; } .carfront .lamp.r { right: -8px; }
+  .carfront.hazard .lamp { background: var(--amber); box-shadow: 0 0 0 10px rgba(255,178,36,.25); animation: blink .67s steps(1) infinite; }
+  @keyframes blink { 50% { background: #C9CFD6; box-shadow: none; } }
+  .carfront .plate { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); min-width: 64px; height: 18px; padding: 0 6px; border: 2px solid var(--ink); border-radius: 4px; background: #fff;
+    color: #11151B; font-size: 10px; font-weight: 800; line-height: 14px; text-align: center; white-space: nowrap; }
+  .find .big { font-size: 24px; font-weight: 800; }
+  .find .small { color: #A9B4C4; font-size: 15px; margin-top: 4px; }
+
+  /* W2 나갈 타이밍 · W7 끝 (전체 화면) */
+  .full { position: fixed; inset: 0; z-index: 900; display: flex; flex-direction: column; padding: calc(60px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom)); }
+  .full .inner { max-width: 440px; width: 100%; margin: 0 auto; flex: 1; display: flex; flex-direction: column; }
+  .full h1 { font-size: 38px; line-height: 1.22; letter-spacing: -1.2px; margin: 10px 0 12px; }
+  .full .grow { flex: 1; }
+  #leave { background: var(--amber); color: var(--amber-ink); }
+  #leave .brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 15px; opacity: .8; }
+  #leave .desc { color: #5A3D00; font-size: 17px; }
+  .brand-tri { background: var(--amber-ink); }
+  .brand-tri::before { border-bottom-color: var(--amber); }
+  #leave .box { background: rgba(255,255,255,.55); border-radius: 22px; padding: 18px 20px; margin-top: 12px; }
+  .bar { display: flex; align-items: center; gap: 14px; font-weight: 800; font-size: 18px; }
+  .bar .track { flex: 1; height: 16px; border-radius: 8px; background: rgba(42,26,0,.15); overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 8px; background: var(--amber-ink); transition: width .6s; }
+  #leave .box p { margin: 12px 0 0; font-size: 14px; color: #5A3D00; line-height: 1.5; }
+  #leave .btn.dark { margin-bottom: 10px; }
+  #leave .btn.later { background: rgba(255,255,255,.4); color: var(--amber-ink); }
+  #done { background: var(--bg); }
+  .check { width: 84px; height: 84px; border-radius: 50%; background: var(--mint-soft); display: grid; place-items: center; margin-bottom: 18px; }
+  .check::before { content: ''; width: 30px; height: 15px; border-left: 6px solid var(--mint-text); border-bottom: 6px solid var(--mint-text); transform: rotate(-45deg); margin-top: -8px; border-radius: 2px; }
+  .check.gray { background: var(--card); }
+  .check.gray::before { width: 30px; height: 0; border: 0; border-top: 6px solid var(--faint); transform: none; margin: 0; }
+  #done .card { background: var(--card); }
+  .foot { text-align: center; color: var(--faint); font-size: 13px; }
+
+  /* 처음 열 때 위치 공유 안내 */
+  #intro { background: var(--bg); z-index: 950; overflow-y: auto; word-break: keep-all; }
+  #intro h1 { font-size: 32px; }
+  #intro .card { align-items: flex-start; }
+  #intro .card .s { white-space: normal; line-height: 1.45; margin-top: 3px; }
+  #intro .foot { margin: 14px 0 0; }
+  #intro .foot a { color: var(--sub); font-weight: 700; }
+
+  /* W4 위 알림 */
+  #toast { position: fixed; left: 16px; right: 16px; top: calc(14px + env(safe-area-inset-top)); z-index: 1000; max-width: 448px; margin: 0 auto;
+    background: var(--ink); color: #fff; border-radius: 20px; padding: 16px 18px; display: flex; gap: 14px; align-items: center;
+    box-shadow: 0 10px 30px rgba(17,21,27,.3); transform: translateY(-140%); transition: transform .35s cubic-bezier(.2,.9,.3,1.2); }
+  #toast.show { transform: none; }
+  #toast .dot { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--mint); display: grid; place-items: center; }
+  #toast .dot::before { content: ''; width: 12px; height: 6px; border-left: 3px solid var(--ink); border-bottom: 3px solid var(--ink); transform: rotate(-45deg); margin-top: -3px; }
+  #toast.warn .dot { background: var(--coral); }
+  #toast.warn .dot::before { content: '!'; width: auto; height: auto; border: 0; transform: none; margin: 0; color: #fff; font-weight: 900; font-size: 20px; }
+  #toast.info .dot::before { border-color: var(--amber-ink); }
+  #toast.info .dot { background: var(--amber); }
+  #toast b { display: block; font-size: 16px; }
+  #toast span { font-size: 14px; color: #A9B4C4; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="centerPin" class="hidden"><div class="place-pin"><b id="centerPinMark">P</b></div></div>
+<button class="fab" id="locate" aria-label="내 위치">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#11151B" stroke-width="2.2"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2" fill="#11151B"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+</button>
+
+<div id="toast"><div class="dot"></div><div><b id="toastT"></b><span id="toastS"></span></div></div>
+
+<div class="sheet" id="sheet">
+  <div class="grab"></div>
+
+  <!-- W1 · 오고 있어요 -->
+  <section id="vLive">
+    <div class="lead" id="liveLead"><span class="tri"></span><span id="liveLeadText">운전자가 데리러 오는 중</span></div>
+    <div class="eta"><b id="etaMin" class="num">–</b><span id="etaSub" class="num">위치를 받는 중…</span></div>
+    <div class="card hidden" id="pushCard">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#11151B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/></svg></div>
+      <div class="tx"><div class="t" id="pushT">휴대폰 알림 받기</div><div class="s" id="pushS">다른 화면을 봐도 도착 전에 알려 드려요</div></div>
+      <button class="mini" id="pushBtn">켜기</button>
+    </div>
+    <div class="card" id="vehicleCard">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="#11151B"><path d="M5 11l1.6-4.6A2 2 0 0 1 8.5 5h7a2 2 0 0 1 1.9 1.4L19 11h.5A1.5 1.5 0 0 1 21 12.5V17a1 1 0 0 1-1 1h-1v1a1 1 0 0 1-2 0v-1H7v1a1 1 0 0 1-2 0v-1H4a1 1 0 0 1-1-1v-4.5A1.5 1.5 0 0 1 4.5 11zm2.1 0h9.8l-1.1-3.4a.9.9 0 0 0-.8-.6H9a.9.9 0 0 0-.8.6zM7 15.5a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zm10 0a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6z"/></svg></div>
+      <div class="tx"><div class="t" id="vehicleName"></div><div class="s" id="vehicleSub"></div></div>
+    </div>
+    <div class="card">
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="#E08A00"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></div>
+      <div class="tx"><div class="t" id="placeName">만날 곳</div><div class="s" id="placeSub"></div></div>
+      <span class="chip hidden" id="placeChip"></span>
+    </div>
+    <div class="notify" id="notifyRow">
+      <div class="lb">도착 전 알림</div>
+      <div class="seg" id="notifySeg">
+        <button data-sec="60">1분</button><button data-sec="180">3분</button><button data-sec="300">5분</button><button data-sec="600">10분</button>
+      </div>
+    </div>
+    <div class="card hidden" id="nextCard">
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#11151B" stroke-width="2.4" stroke-linecap="round"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg></div>
+      <div class="tx"><div class="t" id="nextName"></div><div class="s">탑승 후 목적지 · 운전자 내비에 미리 전달돼요</div></div>
+      <button class="link" id="nextClear">지우기</button>
+    </div>
+    <div class="row">
+      <button class="btn ghost" id="changeBtn">위치 수정 요청</button>
+      <button class="btn soft" id="nextBtn">탑승 후 목적지</button>
+    </div>
+  </section>
+
+  <!-- W5 · 도착 · 차 찾기 -->
+  <section id="vArrived" class="hidden">
+    <div class="tag mint">도착했어요</div>
+    <h1 id="arrTitle">차가 도착했어요</h1>
+    <div class="find">
+      <div class="carfront" id="carFront"><div class="glass"></div><div class="lamp l"></div><div class="lamp r"></div><div class="plate" id="carPlate"></div></div>
+      <div class="big num" id="arrBig">만날 곳에 서 있어요</div>
+      <div class="small" id="arrSmall"></div>
+    </div>
+    <div class="row">
+      <button class="btn soft" id="arrNextBtn">탑승 후 목적지</button>
+    </div>
+  </section>
+
+  <!-- W3 · W6 · 목적지 고르기 (가운데 핀) -->
+  <section id="vPick" class="hidden">
+    <div class="lead hidden" id="pickLead"><span class="tri"></span><span id="pickLeadText"></span></div>
+    <h1 id="pickTitle">어디로 와주면 좋을까요?</h1>
+    <p class="desc" id="pickDesc">지도를 움직여 핀을 맞춰 주세요.</p>
+    <div class="search hidden" id="pickSearchBox">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="pickSearch" type="search" enterkeyhint="search" autocomplete="off" placeholder="장소·주소 검색 (예: 강남역 11번 출구)" maxlength="40">
+    </div>
+    <div class="results hidden" id="pickResults"></div>
+    <div class="pills" id="pickPills">
+      <button class="pill" data-msg="후문에 있어요">후문에 있어요</button>
+      <button class="pill" data-msg="건너편이에요">건너편이에요</button>
+      <button class="pill" data-msg="1층 로비에 있어요">1층 로비</button>
+      <button class="pill" data-msg="">직접 쓰기</button>
+    </div>
+    <input id="pickMsg" class="hidden" placeholder="한마디 (예: 정문 공사 중이라 후문이요)" maxlength="60">
+    <input id="pickName" placeholder="장소 이름 (예: 후문 택시 승강장)" maxlength="30">
+    <div class="meta hidden" id="pickMeta"><span id="pickMetaL">지금 장소에서</span><em id="pickMetaR" class="num"></em></div>
+    <div class="row">
+      <button class="btn ghost" id="pickCancel" style="flex:1">취소</button>
+      <button class="btn primary" id="pickSend" style="flex:2">이 위치로 요청</button>
+    </div>
+    <p class="note" id="pickNote"></p>
+  </section>
+</div>
+
+<!-- W2 · 나갈 타이밍 -->
+<div class="full hidden" id="leave"><div class="inner">
+  <div class="brand"><span class="tri brand-tri"></span>나온나</div>
+  <h1>지금 나오시면<br>딱 맞아요</h1>
+  <p class="desc" id="leaveDesc"></p>
+  <div class="box">
+    <div class="bar"><svg width="24" height="24" viewBox="0 0 24 24" fill="#2A1A00"><path d="M5 11l1.6-4.6A2 2 0 0 1 8.5 5h7a2 2 0 0 1 1.9 1.4L19 11h.5A1.5 1.5 0 0 1 21 12.5V17a1 1 0 0 1-1 1h-1v1a1 1 0 0 1-2 0v-1H7v1a1 1 0 0 1-2 0v-1H4a1 1 0 0 1-1-1v-4.5A1.5 1.5 0 0 1 4.5 11zm2.1 0h9.8l-1.1-3.4a.9.9 0 0 0-.8-.6H9a.9.9 0 0 0-.8.6zM7 15.5a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zm10 0a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6z"/></svg>
+      <div class="track"><div class="fill" id="leaveFill" style="width:100%"></div></div><span id="leaveMin" class="num">5분</span></div>
+    <p id="leaveNote"></p>
+  </div>
+  <div class="grow"></div>
+  <button class="btn dark" id="leaveGo">지금 나가요</button>
+  <button class="btn later" id="leaveMap">지도에서 볼게요</button>
+</div></div>
+
+<!-- 처음 열 때 · 위치 공유 안내 (링크마다 한 번) -->
+<div class="full hidden" id="intro"><div class="inner">
+  <div class="brand" style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;color:var(--sub)">나온나 · 픽업 위치 공유</div>
+  <h1 id="introTitle">운전자가 픽업 위치를<br>공유했어요</h1>
+  <p class="desc">보기 전에 어떤 정보가 어떻게 쓰이는지 알려 드려요.</p>
+  <div class="card">
+    <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#11151B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></div>
+    <div class="tx"><div class="t">보이는 정보</div><div class="s" id="introSee">운전자 차의 실시간 위치와 도착 예정 시간이에요. 링크를 열면 운전자 화면에 '링크 확인'으로 표시돼요.</div></div>
+  </div>
+  <div class="card">
+    <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#11151B" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>
+    <div class="tx"><div class="t">내 위치는 선택</div><div class="s">[내 위치] 버튼을 누를 때만 써요. 걸어서 걸리는 시간 계산에만 쓰고, 운전자에게 보내지 않아요.</div></div>
+  </div>
+  <div class="card">
+    <div class="ic"><svg width="18" height="20" viewBox="0 0 18 20" fill="#11151B"><path d="M3 9V6a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zm2.5 0h7V6a3.5 3.5 0 0 0-7 0z"/></svg></div>
+    <div class="tx"><div class="t">자동 삭제</div><div class="s">탑승하거나 공유가 끝나면, 늦어도 2시간 뒤에는 링크가 만료되고 위치 기록이 지워져요.</div></div>
+  </div>
+  <div class="grow"></div>
+  <button class="btn dark" id="introOk" style="margin-top:18px">확인하고 보기</button>
+  <p class="foot"><a href="/privacy" target="_blank" rel="noopener">개인정보 처리방침</a></p>
+</div></div>
+
+<!-- W7 · 탑승 · 링크 만료 -->
+<div class="full hidden" id="done"><div class="inner">
+  <div class="check" id="doneCheck"></div>
+  <h1 id="doneTitle">위치 공유가 끝났어요</h1>
+  <p class="desc" id="doneDesc"></p>
+  <div class="card hidden" id="doneNext">
+    <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#11151B" stroke-width="2.4" stroke-linecap="round"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg></div>
+    <div class="tx"><div class="t" id="doneNextT"></div><div class="s">미리 남긴 목적지</div></div>
+  </div>
+  <div class="card hidden" id="doneDel">
+    <div class="ic"><svg width="18" height="20" viewBox="0 0 18 20" fill="#12895F"><path d="M3 9V6a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zm2.5 0h7V6a3.5 3.5 0 0 0-7 0z"/></svg></div>
+    <div class="tx"><div class="t">위치 기록 삭제됨</div><div class="s num" id="doneDelS"></div></div>
+  </div>
+  <div class="grow"></div>
+  <div class="foot">나온나 · 전화 없이 만나는 픽업</div>
+</div></div>
+
+<script>
+// 나온나 받는 사람 웹 (/p/:id). 앱 설치 없이 링크로 연다.
+// 흐름: 안내(개인정보) → 지도에서 차 위치·도착 시간 보기 → 장소 정하기·바꾸기(검색/핀) → 나갈 타이밍 → 도착·비상등 → 탑승(공유 끝)
+// 구성: 지도(MapView: TMAP, 앱키 없으면 Leaflet) · 상태(s = 서버가 SSE로 보내는 픽업) · 그리기(render) · 장소 고르기 · 알림
+const id = location.pathname.split('/').filter(Boolean)[1];
+const $ = (x) => document.getElementById(x);
+const show = (el, on) => (typeof el === 'string' ? $(el) : el).classList.toggle('hidden', !on);
+
+// ---------- 한국어 조사 ----------
+function hasBatchim(word) {
+  const c = (word || '').trim().slice(-1).charCodeAt(0);
+  if (c >= 0xAC00 && c <= 0xD7A3) return (c - 0xAC00) % 28;
+  return /[0-9]$/.test(word) ? ([0, 1, 3, 6, 7, 8].includes(+word.slice(-1)) ? 1 : 0) : 0;
+}
+const ga = (w) => w + (hasBatchim(w) ? '이' : '가');
+const ro = (w) => { const b = hasBatchim(w); return w + (b && b !== 8 ? '으로' : '로'); }; // 8 = ㄹ 받침
+
+// ---------- 지도 ----------
+// 화면 코드는 MapView 만 쓴다. TMAP(앱키 있음)과 Leaflet(개발용) 둘 다 같은 함수를 제공해요.
+//   setCar · setPlace · setMe · setRoute · fit · flyTo · panBy · pointAt · onMove · onTap · panToPoint
+const carSvg = (deg) => `<div class="car-pin"><svg viewBox="0 0 20 20" style="transform:rotate(${Math.round(deg || 0)}deg)"><path d="M10 1.5 17 18 10 14 3 18z" fill="#fff"/></svg></div>`;
+const placeHtml = '<div class="place-pin"><b>P</b></div>';
+const meHtml = '<div class="me-pin"></div>';
+
+const MapView = window.Tmapv2 ? tmapView() : leafletView();
+
+// TMAP 지도 (실서비스)
+function tmapView() {
+  const T = window.Tmapv2;
+  const LL = (p) => new T.LatLng(p.lat, p.lng);
+  const map = new T.Map('map', { center: new T.LatLng(37.4979, 127.0276), width: '100%', height: '100%', zoom: 16, zoomControl: false, scrollwheel: true });
+  let car = null, place = null, me = null, route = null, straight = null;
+
+  // 맥 트랙패드 핀치·두 손가락 스크롤은 아주 잘게 쪼개진 휠 신호가 수십 개씩 들어온다.
+  // TMAP은 이걸 그대로 받아 확대 단계를 몰아서 바꾸느라 끊긴다. 그래서 휠 신호는 여기서 가로채
+  // 모아 두었다가, 한 단계만큼 쌓이면 손가락(커서) 자리를 기준으로 한 단계씩만 바꾼다.
+  (() => {
+    const el = document.getElementById('map');
+    let acc = 0, busyUntil = 0, resetTimer = null;
+    el.addEventListener('wheel', (e) => {
+      e.preventDefault(); e.stopPropagation(); // 페이지 확대와 TMAP 자체 휠 처리를 막는다
+      const now = performance.now();
+      const dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY; // 줄 단위 → 픽셀
+      clearTimeout(resetTimer); resetTimer = setTimeout(() => { acc = 0; }, 250);
+      if (now < busyUntil) return; // 방금 한 단계 바꿨으면 그 애니메이션이 끝날 때까지 무시
+      acc += dy;
+      const need = e.ctrlKey ? 30 : 90; // 핀치는 신호가 작아서 문턱을 낮게
+      if (Math.abs(acc) < need) return;
+      const z0 = map.getZoom();
+      const z1 = Math.max(7, Math.min(19, z0 + (acc < 0 ? 1 : -1)));
+      acc = 0;
+      if (z1 === z0) return;
+      busyUntil = now + 220;
+      // 커서 자리가 화면에서 그대로 있도록 가운데를 옮긴다.
+      // setZoom은 애니메이션 중에 들어온 setCenter를 무시해서, 가운데를 먼저 옮기고 확대한다.
+      const r = el.getBoundingClientRect();
+      const at = toLL(map.screenToReal(new T.Point(e.clientX - r.left, e.clientY - r.top)));
+      const c = toLL(map.getCenter());
+      const k = Math.pow(2, z0 - z1);
+      map.setCenter(new T.LatLng(at.lat + (c.lat - at.lat) * k, at.lng + (c.lng - at.lng) * k));
+      map.setZoom(z1);
+    }, { capture: true, passive: false });
+  })();
+  // 마커는 HTML 그대로 (기존 핀 디자인 유지). anchor = 그림에서 좌표가 찍히는 점
+  // 화면은 1~2초마다 다시 그려지는데, 그때마다 마커를 지우고 새로 만들면 TMAP 지도의
+  // 확대·축소·드래그가 끊긴다. 그래서 한 번 만든 마커는 바뀐 것(위치·모양)만 고친다.
+  const put = (m, p, html, w, h, ax, ay) => {
+    if (!p) { if (m) m.setMap(null); return null; }
+    if (!m) {
+      m = new T.Marker({ position: LL(p), iconHTML: html, iconSize: new T.Size(w, h), offset: new T.Point(ax, ay), map });
+      m._at = `${p.lat},${p.lng}`; m._html = html;
+      return m;
+    }
+    const at = `${p.lat},${p.lng}`;
+    if (m._at !== at) { m.setPosition(LL(p)); m._at = at; }
+    if (m._html !== html) { m.setIconHTML(html); m._html = html; }
+    return m;
+  };
+  // 선도 같은 방식: 있으면 좌표만 바꾸고, 좌표가 그대로면 손대지 않는다
+  const line = (l, path, opts) => {
+    if (!path) { if (l) l.setMap(null); return null; }
+    const key = path.map((p) => `${p.lat},${p.lng}`).join(';');
+    if (l && l._key === key) return l;
+    const pts = path.map(LL);
+    if (l) l.setPath(pts); else l = new T.Polyline({ path: pts, ...opts, map });
+    l._key = key;
+    return l;
+  };
+  const toLL = (x) => ({ lat: typeof x.lat === 'function' ? x.lat() : x._lat, lng: typeof x.lng === 'function' ? x.lng() : x._lng });
+  const view = {
+    map,
+    setCar(p) { car = put(car, p, carSvg(p && p.heading), 44, 44, 22, 22); carAt = p; this.drawLine(); },
+    setPlace(p) { place = put(place, p, placeHtml, 44, 44, 22, 44); placeAt = p; this.drawLine(); },
+    setMe(p) { me = put(me, p, meHtml, 18, 18, 9, 9); },
+    // 도로 경로(TMAP 자동차 경로)가 있으면 그 선, 없으면 차→만날 곳 점선
+    setRoute(path) {
+      const pts = path && path.length > 1 ? path.map(([lat, lng]) => ({ lat, lng })) : null;
+      route = line(route, pts, { strokeColor: '#4DA3FF', strokeWeight: 6, strokeOpacity: 0.9 });
+      this.drawLine();
+    },
+    drawLine() {
+      const pts = !route && carAt && placeAt ? [carAt, placeAt] : null;
+      straight = line(straight, pts, { strokeColor: '#11151B', strokeWeight: 4, strokeOpacity: 0.5, strokeStyle: 'dot' });
+    },
+    fit(points, bottomPad) {
+      const pts = points.filter(Boolean);
+      if (!pts.length) return;
+      if (pts.length === 1) { map.setCenter(LL(pts[0])); map.setZoom(17); view.panBy(0, bottomPad / 2); return; }
+      const b = new T.LatLngBounds();
+      pts.forEach((p) => b.extend(LL(p)));
+      map.fitBounds(b, { left: 40, top: 90, right: 40, bottom: bottomPad + 30 });
+      if (map.getZoom() > 17) map.setZoom(17);
+      // 지도가 아직 준비되기 전에 맞추면 엉뚱한 곳(아주 멀리, 최소 확대)으로 가는 경우가 있어서 한 번 더 확인
+      const c = toLL(map.getCenter());
+      const mid = { lat: pts.reduce((a, p) => a + p.lat, 0) / pts.length, lng: pts.reduce((a, p) => a + p.lng, 0) / pts.length };
+      if (!(meters(c, mid) < 20000)) { map.setCenter(LL(mid)); map.setZoom(15); }
+    },
+    pointAt(x, y) { return toLL(map.screenToReal(new T.Point(x, y))); }, // 화면 픽셀 → 위경도
+    // 화면을 (dx, dy)픽셀만큼 옮긴다: 지금 가운데에서 그만큼 떨어진 곳을 새 가운데로
+    panBy(dx, dy) {
+      const el = $('map');
+      const to = view.pointAt(el.clientWidth / 2 + dx, el.clientHeight / 2 + dy);
+      // 화면 크기를 아직 모를 때 계산이 틀어지면(몇 km 이상 튐) 옮기지 않는다
+      if (Number.isFinite(to.lat) && meters(toLL(map.getCenter()), to) < 5000) map.setCenter(LL(to));
+    },
+    flyTo(p, bottomPad) { map.setCenter(LL(p)); map.setZoom(17); view.panBy(0, bottomPad / 2); },
+    onMove(fn) { ['drag', 'dragend', 'zoom_changed', 'touchmove', 'touchend'].forEach((ev) => map.addListener(ev, fn)); },
+    onTap(fn) { map.addListener('click', (e) => e && e.latLng && fn(toLL(e.latLng))); },
+    panToPoint(p) { map.setCenter(LL(p)); },
+  };
+  let carAt = null, placeAt = null;
+
+  // 지도를 손가락·마우스로 끄는 동안 차·경로가 갱신되면 TMAP이 레이어를 다시 그리느라 끌기가 끊긴다.
+  // 그래서 누르고 있는 동안 들어온 갱신은 종류별로 마지막 것만 모아 두었다가, 손을 뗀 뒤 한 번에 그린다.
+  const el = document.getElementById('map');
+  const pending = new Map();
+  let holding = false, releaseTimer = null, safetyTimer = null;
+  const flush = () => { const jobs = [...pending.values()]; pending.clear(); jobs.forEach((job) => job()); };
+  const release = (delay = 250) => {
+    clearTimeout(releaseTimer); clearTimeout(safetyTimer);
+    releaseTimer = setTimeout(() => { holding = false; flush(); }, delay);
+  };
+  const hold = () => {
+    holding = true; clearTimeout(releaseTimer); clearTimeout(safetyTimer);
+    safetyTimer = setTimeout(() => release(0), 8000); // 손 뗀 신호를 놓쳐도 8초 뒤엔 다시 그린다
+  };
+  el.addEventListener('pointerdown', hold, true);
+  el.addEventListener('touchstart', hold, { capture: true, passive: true });
+  el.addEventListener('wheel', () => { hold(); release(400); }, { capture: true, passive: true });
+  ['pointerup', 'pointercancel', 'touchend', 'touchcancel'].forEach((ev) => addEventListener(ev, () => holding && release(), true));
+  for (const k of ['setCar', 'setPlace', 'setMe', 'setRoute']) {
+    const draw = view[k].bind(view);
+    view[k] = (...args) => (holding ? pending.set(k, () => draw(...args)) : draw(...args));
+  }
+  return view;
+}
+
+// 개발용 지도 (앱키 없을 때): Leaflet + OpenStreetMap, 회색 처리
+function leafletView() {
+  const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([37.4979, 127.0276], 16);
+  // 개발용 OpenStreetMap 타일 (실서비스는 TMAP으로 교체)
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  const icon = (html, size, anchor) => L.divIcon({ className: '', html, iconSize: size, iconAnchor: anchor });
+  const carIcon = (deg) => icon(carSvg(deg), [44, 44], [22, 22]);
+  const placeIcon = icon(placeHtml, [44, 44], [22, 44]);
+  const meIcon = icon(meHtml, [18, 18], [9, 9]);
+  let car = null, place = null, me = null, line = null;
+  const put = (m, ll, ic) => { if (!ll) { if (m) map.removeLayer(m); return null; } if (m) { m.setLatLng(ll); if (ic) m.setIcon(ic); return m; } return L.marker(ll, { icon: ic, interactive: false }).addTo(map); };
+  return {
+    map,
+    setCar(p) { car = put(car, p && [p.lat, p.lng], p && carIcon(p.heading)); this.drawLine(); },
+    setPlace(p) { place = put(place, p && [p.lat, p.lng], placeIcon); this.drawLine(); },
+    setMe(p) { me = put(me, p && [p.lat, p.lng], meIcon); },
+    setRoute() { /* 개발용 지도는 도로 경로 없이 점선만 */ },
+    drawLine() {
+      if (line) { map.removeLayer(line); line = null; }
+      if (car && place) line = L.polyline([car.getLatLng(), place.getLatLng()], { color: '#11151B', weight: 4, opacity: .55, dashArray: '2 10', lineCap: 'round' }).addTo(map);
+    },
+    panBy(dx, dy) { map.panBy([dx, dy], { animate: false }); },
+    fit(points, bottomPad) {
+      const pts = points.filter(Boolean).map((p) => [p.lat, p.lng]);
+      if (!pts.length) return;
+      if (pts.length === 1) map.setView(pts[0], 17, { animate: false });
+      else map.fitBounds(pts, { paddingTopLeft: [40, 90], paddingBottomRight: [40, bottomPad + 30], maxZoom: 17 });
+      // 시트에 가려지는 만큼 위로 올려 가운데 맞춤
+      if (pts.length === 1) map.panBy([0, bottomPad / 2], { animate: false });
+    },
+    pointAt(x, y) { const ll = map.containerPointToLatLng([x, y]); return { lat: ll.lat, lng: ll.lng }; },
+    flyTo(p, bottomPad) { map.setView([p.lat, p.lng], 17); map.panBy([0, bottomPad / 2], { animate: false }); },
+    onMove(fn) { map.on('move', fn); },
+    onTap(fn) { map.on('click', (e) => fn({ lat: e.latlng.lat, lng: e.latlng.lng })); },
+    panToPoint(p) { map.panTo([p.lat, p.lng]); },
+  };
+}
+
+// ---------- TMAP 도움 (서버를 거쳐 호출: 앱키 없으면 조용히 건너뜀) ----------
+const Tmap = {
+  enabled: !!window.Tmapv2,
+  async get(action, q) {
+    if (!this.enabled) return null;
+    const qs = q ? `?${new URLSearchParams(q)}` : '';
+    const r = await fetch(`/api/sessions/${id}/${action}${qs}`).catch(() => null);
+    return r && r.ok ? r.json() : null;
+  },
+};
+
+// 차 → 만날 곳 도로 경로: 장소가 바뀌거나 1분 지나면 다시 받는다 (서버도 90초 캐시, 하루 1천 건 한도)
+let routeKey = '', routeAt = 0, routePath = null;
+async function refreshRoute() {
+  if (!Tmap.enabled || !s || !s.car || !s.place || s.state !== 'DRIVING') {
+    if (routeKey) { routePath = null; MapView.setRoute(null); routeKey = ''; }
+    return;
+  }
+  const key = `${s.place.lat},${s.place.lng}`;
+  if (key !== routeKey || Date.now() - routeAt >= 60_000) {
+    routeKey = key; routeAt = Date.now();
+    const r = await Tmap.get('route');
+    if (key !== routeKey) return;
+    routePath = r && r.path && r.path.length > 1 ? r.path : null;
+  }
+  drawRoute();
+}
+// 받아 둔 경로를 지금 차 위치에서부터 그린다 (차가 지나간 앞부분은 잘라냄)
+function drawRoute() {
+  if (!routePath || !s.car) return MapView.setRoute(null);
+  let best = 0, bestD = Infinity;
+  routePath.forEach(([lat, lng], i) => { const d = meters(s.car, { lat, lng }); if (d < bestD) { bestD = d; best = i; } });
+  MapView.setRoute([[s.car.lat, s.car.lng], ...routePath.slice(best + 1)]);
+}
+
+// 내 위치 → 만날 곳 걸어서 걸리는 시간 (W2 나갈 타이밍)
+let walk = null, walkKey = '';
+async function refreshWalk() {
+  if (!Tmap.enabled || !me || !s || !s.place) return;
+  const key = `${me.lat.toFixed(4)},${me.lng.toFixed(4)}>${s.place.lat},${s.place.lng}`;
+  if (key === walkKey) return;
+  walkKey = key;
+  const w = await Tmap.get('walk', { lat: me.lat, lng: me.lng });
+  if (w && key === walkKey) { walk = w; render(); }
+}
+
+function meters(a, b) {
+  const R = 6371000, r = Math.PI / 180;
+  const h = Math.sin((b.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin((b.lng - a.lng) * r / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const fmtM = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m / 10) * 10}m`);
+// 알림 시점처럼 짧을 수 있는 시간: 60초 미만은 초로
+const fmtDur = (sec) => (sec < 60 ? `${Math.round(sec)}초` : `${Math.round(sec / 60)}분`);
+function clock(ms) {
+  const d = new Date(ms), h = d.getHours(), m = String(d.getMinutes()).padStart(2, '0');
+  return `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}:${m}`;
+}
+
+// ---------- 상태 ----------
+let s = null;               // 서버에서 받은 세션
+let skew = 0;               // 서버 시계 - 내 시계
+let mode = null;            // null | 'change' | 'first' | 'next'
+let pickMsg = '';
+let me = null;              // 내 위치 (허용한 경우만)
+let seenResolutionAt = null; // 이미 본 운전자 답 (W4 알림 중복 방지)
+let fitted = false, lastPlaceKey = '';
+let missing = false;
+const leaveKey = `nowonna:${id}:leaveSeen`;
+let leaveSeen = sessionStorage.getItem(leaveKey) === '1';
+// 위치 공유 안내: 링크마다 한 번. 저장소를 못 쓰는 브라우저(사생활 보호 모드 등)에선 열 때마다 보여 준다.
+const introKey = `nowonna:${id}:intro`;
+let introSeen = false;
+try { introSeen = localStorage.getItem(introKey) === '1'; } catch { /* 저장소 막힘 */ }
+
+const PERM = {
+  VIEW:    { btn: '위치 수정 요청', send: '이 위치로 요청', title: '어디로 와주면 좋을까요?', note: '보기 권한이에요. 운전자가 확인하면 바뀌어요.' },
+  SUGGEST: { btn: '다른 장소 제안', send: '이 위치로 제안', title: '어디로 와주면 좋을까요?', note: '제안하면 운전자가 한 번 눌러 승인해요.' },
+  AUTO:    { btn: '만날 곳 바꾸기', send: '여기로 바꾸기', title: '어디서 만날까요?', note: '바꾸면 차 내비에 바로 반영돼요.' },
+};
+
+const driver = () => (s && s.driverLabel) || '운전자';
+// 이름을 등록하지 않았으면 "운전자님" 대신 "운전자"
+const named = () => driver() !== '운전자';
+const nim = () => (named() ? `${driver()}님` : '운전자');
+const nimI = () => (named() ? `${driver()}님이` : '운전자가');
+const vehicleText = () => (s && s.vehicle ? `${s.vehicle.color || ''} ${s.vehicle.model || ''}`.trim() : '');
+// 번호판 (도착했을 때 차 확인용)
+const plateText = () => (s && s.vehicle && s.vehicle.plate) || '';
+const withPlate = (t) => (plateText() ? `${t} · ${plateText()}` : t);
+const sheetH = () => $('sheet').offsetHeight;
+const carAgeSec = () => (s && s.car && s.car.at ? (Date.now() + skew - s.car.at) / 1000 : null);
+// 마지막 위치 이후 흐른 시간만큼 남은 시간을 줄여서 보여준다
+const remainNow = () => (s && s.car && s.car.remainSec != null ? Math.max(0, s.car.remainSec - Math.max(0, carAgeSec() || 0)) : null);
+
+// ---------- 그리기 ----------
+function render() {
+  if (missing) return renderDone(true);
+  if (!s) return;
+  if (s.state === 'ENDED') { show('intro', false); return renderDone(false); }
+  if (!introSeen) {
+    $('introTitle').innerHTML = `${escapeHtml(nimI())} 픽업 위치를<br>공유했어요`;
+    show('intro', true);
+  }
+
+  const needFirst = !s.place;
+  if (needFirst && mode !== 'first') openPick('first');
+  if (!needFirst && mode === 'first') closePick();
+
+  MapView.setCar(s.car && s.car.lat ? s.car : null);
+  MapView.setPlace(s.place);
+  MapView.setMe(me);
+  refreshRoute();
+  refreshWalk();
+
+  const arrived = s.state === 'ARRIVED' || s.state === 'BOARDED';
+  show('vLive', !mode && !arrived);
+  show('vArrived', !mode && arrived);
+  show('vPick', !!mode);
+  if (mode) renderPickMeta(); else if (arrived) renderArrived(); else renderLive();
+  renderLeave();
+  placeFab();
+
+  const key = (s.place ? `${s.place.lat},${s.place.lng}` : '') + (arrived ? ':arrived' : '');
+  if (!mode && (!fitted || key !== lastPlaceKey) && (s.car || s.place)) {
+    MapView.fit([s.car, s.place], sheetH());
+    fitted = true;
+  }
+  lastPlaceKey = key;
+  checkCarEvents();
+}
+
+// 차 쪽에서 생긴 일을 앱 알림처럼 위 배너로 (진동 포함). 링크마다 한 번씩만 띄운다.
+// 처음 열었을 때 이미 지난 일은 띄우지 않는다 (새로고침해도 다시 안 뜨게 기록해 둔다).
+const notiKey = `nowonna:${id}:noti`;
+let notiDone = null;
+function checkCarEvents() {
+  if (notiDone === null) {
+    try { notiDone = new Set(JSON.parse(sessionStorage.getItem(notiKey) || '[]')); } catch { notiDone = new Set(); }
+  }
+  const first = !checkCarEvents.ran;
+  checkCarEvents.ran = true;
+  const r = remainNow();
+  const driving = s.state === 'DRIVING' && s.place && r != null && s.car.remainSec > 0;
+  const arrived = s.state === 'ARRIVED';
+  const placeName = s.place ? s.place.name : '';
+  const events = [
+    // 순서 = 우선순위 (한 번에 여러 개면 뒤의 것이 화면에 남는다)
+    ['leave', driving && r <= leaveBeforeSec() && r > 60, 'info', '지금 나가면 딱 맞아요', `${nim()} 차가 ${Math.max(1, Math.ceil((r || 0) / 60))}분 뒤 ${placeName}에 도착해요`],
+    ['soon', driving && r <= 60, 'info', `${nim()} 차가 곧 도착해요`, `1분 안에 ${placeName}에 도착해요`],
+    ['arrived', arrived, 'ok', `${nimI()} 도착했어요`, `${withPlate(vehicleText() || '차')} · ${placeName}`],
+    ['hazard', arrived && s.hazard, 'info', '비상등을 켰어요', `비상등이 깜빡이는 ${withPlate(vehicleText() || '차')}를 찾으세요`],
+  ];
+  let fired = null;
+  for (const [k, on, kind, title, sub] of events) {
+    const key = `${k}:${placeName}`; // 장소가 바뀌면 다시 알림
+    if (!on || notiDone.has(key)) continue;
+    notiDone.add(key);
+    if (!first) fired = fired && k === 'hazard' && fired[1].includes('도착') ? [fired[0], fired[1], sub] : [kind, title, sub]; // 도착+비상등 동시면 합친다 (서버 알림과 같게)
+  }
+  try { sessionStorage.setItem(notiKey, JSON.stringify([...notiDone])); } catch {}
+  if (!fired) return;
+  toast(...fired);
+  try { navigator.vibrate && navigator.vibrate([180, 90, 180]); } catch {}
+  // 다른 탭을 보고 있으면 탭 제목으로도 알려 준다
+  if (document.hidden) {
+    const base = document.title.replace(/^🔔 .*? · /, '');
+    document.title = `🔔 ${fired[1]} · ${base}`;
+    addEventListener('visibilitychange', () => { document.title = base; }, { once: true });
+  }
+}
+
+function renderLive() {
+  renderPush();
+  syncPushLeave();
+  const age = carAgeSec();
+  const stale = age != null && age > 20;
+  $('liveLead').classList.toggle('warn', stale);
+  $('liveLeadText').textContent = stale
+    ? `신호가 잠시 끊겼어요 · 마지막 위치 ${age < 90 ? `${Math.round(age)}초` : `${Math.round(age / 60)}분`} 전`
+    : `${nimI()} 데리러 오는 중`;
+
+  const r = remainNow();
+  if (r != null && s.car && s.car.remainSec > 0) {
+    const min = Math.max(1, Math.ceil(r / 60));
+    $('etaMin').textContent = `${min}분`;
+    const km = s.car.remainMeters != null ? ` · ${fmtM(s.car.remainMeters)}` : '';
+    $('etaSub').textContent = `뒤 도착 · ${clock(Date.now() + r * 1000)}${km}`;
+  } else {
+    $('etaMin').textContent = '–';
+    $('etaSub').textContent = s.car ? '경로를 계산하는 중…' : '차 위치를 받는 중…';
+  }
+
+  const vt = vehicleText();
+  show('vehicleCard', !!vt);
+  $('vehicleName').textContent = vt;
+  // 이름을 등록하지 않았으면 "운전 운전자"가 되지 않게 번호판만 보여 준다
+  $('vehicleSub').textContent = [plateText(), named() ? `운전 ${driver()}` : ''].filter(Boolean).join(' · ');
+
+  $('placeName').textContent = s.place ? s.place.name : '만날 곳';
+  const pc = s.pendingChange;
+  const chip = $('placeChip');
+  if (pc && !pc.applied) {
+    $('placeSub').textContent = `${pc.place.name} 요청을 보냈어요 · 확인 중`;
+    chip.textContent = '확인 중'; chip.className = 'chip amber';
+  } else if (s.originalPlace) {
+    $('placeSub').textContent = `변경됨 · 원래: ${s.originalPlace.name}`;
+    chip.textContent = '변경'; chip.className = 'chip coral';
+  } else {
+    $('placeSub').textContent = `도착 ${fmtDur(notifySec())} 전에 알려 드릴게요`;
+    chip.className = 'chip hidden';
+  }
+
+  [...$('notifySeg').children].forEach((b) => b.classList.toggle('on', Number(b.dataset.sec) === notifySec()));
+  show('notifyRow', s.state === 'DRIVING');
+  show('nextCard', !!s.nextPlace);
+  if (s.nextPlace) $('nextName').textContent = `탑승 후 ${s.nextPlace.name}`;
+  $('nextBtn').textContent = s.nextPlace ? '목적지 바꾸기' : '탑승 후 목적지';
+  $('changeBtn').textContent = (PERM[s.permission] || PERM.VIEW).btn;
+}
+
+function renderArrived() {
+  const vt = vehicleText();
+  const name = vt || '차';
+  $('arrTitle').innerHTML = s.hazard
+    ? `비상등 켠<br>${ga(escapeHtml(name))} 저예요`
+    : vt ? `${ga(escapeHtml(vt))}<br>도착했어요` : `${escapeHtml(nim())} 차가<br>도착했어요`;
+  $('carFront').classList.toggle('hazard', !!s.hazard);
+  $('carPlate').textContent = plateText();
+  if (me && s.car) {
+    $('arrBig').textContent = `차까지 약 ${fmtM(meters(me, s.car))}`;
+  } else {
+    $('arrBig').textContent = s.hazard ? '비상등이 깜빡이는 차예요' : '만날 곳에 서 있어요';
+  }
+  $('arrSmall').textContent = `${plateText() ? `번호판 ${plateText()} · ` : ''}${s.place ? s.place.name : ''} · 정차 중`;
+  $('arrNextBtn').textContent = s.nextPlace ? `탑승 후 ${s.nextPlace.name} · 바꾸기` : '탑승 후 목적지 남기기';
+}
+
+// 알림 시점: 받는 사람이 웹에서 고른 값 (이 링크에만 저장), 안 골랐으면 운전자가 정한 값
+const notifyKey = `nowonna:${id}:notify`;
+let myNotify = null;
+try { myNotify = Number(localStorage.getItem(notifyKey)) || null; } catch {}
+const notifySec = () => myNotify || (s && s.notifyBeforeSec) || 180;
+$('notifySeg').onclick = (e) => {
+  const sec = Number(e.target && e.target.dataset && e.target.dataset.sec);
+  if (!sec) return;
+  myNotify = sec;
+  try { localStorage.setItem(notifyKey, String(sec)); } catch {}
+  render();
+  toast('info', `도착 ${fmtDur(sec)} 전에 알려 드릴게요`, '나갈 타이밍에 맞춰 화면과 알림으로 알려 드려요');
+};
+
+// 나갈 타이밍 = 차 도착까지 남은 시간이 (걸어서 걸리는 시간 + 30초) 또는 알림 시점 중 큰 값 아래로
+const leaveBeforeSec = () => Math.max(notifySec(), walk && walk.sec != null ? walk.sec + 30 : 0);
+
+function renderLeave() {
+  const r = remainNow();
+  const before = leaveBeforeSec();
+  const due = s.state === 'DRIVING' && s.place && r != null && s.car.remainSec > 0 && r <= before;
+  if (due && !leaveSeen) {
+    const min = Math.max(1, Math.ceil(r / 60));
+    $('leaveDesc').textContent = `${nim()} 차가 ${min}분 뒤 ${s.place.name}에 도착해요.`;
+    $('leaveMin').textContent = `${min}분`;
+    $('leaveFill').style.width = `${Math.min(100, (r / before) * 100)}%`;
+    $('leaveNote').textContent = walk && walk.sec != null
+      ? `여기서 ${s.place.name}까지 걸어서 약 ${fmtDur(walk.sec)}(${fmtM(walk.meters || 0)}) 걸려요. 지금 나가면 차와 비슷하게 도착해요.`
+      : `도착 ${fmtDur(notifySec())} 전에 알려 드리기로 했어요. 차가 오는 모습은 지도에서 계속 볼 수 있어요.`;
+  }
+  show('leave', due && !leaveSeen && !mode);
+}
+
+function renderDone(notFound) {
+  show('leave', false); show('sheet', false); show('locate', false); show('centerPin', false);
+  show('done', true);
+  const boarded = !notFound && s && s.boardedAt;
+  $('doneCheck').className = notFound ? 'check gray' : 'check';
+  $('doneTitle').innerHTML = notFound ? '링크가 만료됐어요' : boarded ? '탑승했어요.<br>위치 공유가 끝났어요' : '위치 공유가 끝났어요';
+  $('doneDesc').textContent = notFound
+    ? '이미 끝났거나 없는 픽업이에요. 새 링크를 받아 주세요.'
+    : `${nim()} 차 위치는 이제 보이지 않아요. 이 링크도 만료됐어요.`;
+  show('doneNext', !!(boarded && s.nextPlace));
+  if (boarded && s.nextPlace) $('doneNextT').textContent = `${ro(s.nextPlace.name)} 안내 중`;
+  show('doneDel', !notFound);
+  if (!notFound) $('doneDelS').textContent = `${clock(s.endedAt || Date.now())} · 공유 종료와 함께`;
+}
+
+function escapeHtml(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+// ---------- 장소 고르기 (W3 수정 요청 · W6 처음 정하기 · 탑승 후 목적지) ----------
+function openPick(kind) {
+  mode = kind;
+  pickMsg = '';
+  $('pickName').value = kind === 'next' && s.nextPlace ? s.nextPlace.name : '';
+  $('pickMsg').value = '';
+  resetSearch();
+  document.querySelectorAll('.pill').forEach((p) => p.classList.remove('on'));
+  show('pickMsg', false);
+  const perm = PERM[s.permission] || PERM.VIEW;
+  show('pickLead', kind === 'first');
+  $('pickLeadText').textContent = `${nimI()} 데리러 가요`;
+  show('pickPills', kind === 'change');
+  show('pickCancel', kind !== 'first');
+  if (kind === 'first') {
+    $('pickTitle').textContent = '어디로 갈까요?';
+    $('pickDesc').textContent = '장소를 검색하거나 지도를 움직여 핀을 맞춰 주세요. 차가 바로 출발해요.';
+    $('pickSend').textContent = '여기로 와주세요';
+    $('pickNote').textContent = '';
+  } else if (kind === 'next') {
+    $('pickTitle').textContent = '탑승 후 어디로 갈까요?';
+    $('pickDesc').textContent = '검색하거나 핀을 맞춰 두면 운전자 내비에 미리 전달돼요. 타자마자 바로 안내해요.';
+    $('pickSend').textContent = '이 목적지 남기기';
+    $('pickNote').textContent = '';
+  } else {
+    $('pickTitle').textContent = perm.title;
+    $('pickDesc').textContent = '장소를 검색하거나 핀을 맞추고, 한마디를 골라 주세요.';
+    $('pickSend').textContent = perm.send;
+    $('pickNote').textContent = perm.note;
+  }
+  show('leave', false);
+  render();
+  // 처음 핀 위치: 다음 목적지는 기존 값, 나머지는 지금 만날 곳이나 내 위치
+  const start = kind === 'next' ? (s.nextPlace || me) : (me || s.place || s.car);
+  requestAnimationFrame(() => {
+    if (start) MapView.flyTo(start, sheetH());
+    if (kind === 'first' && !me) MapView.panBy(0, -110); // 핀이 차를 가리지 않게 조금 위에서 시작
+    placeCenterPin();
+    pinName = '';
+    lookupPinName();
+  });
+}
+
+function closePick() {
+  mode = null;
+  show('centerPin', false);
+  render();
+  MapView.fit([s.car, s.place], sheetH());
+}
+
+function pickCenter() {
+  const h = window.innerHeight - sheetH();
+  return { x: window.innerWidth / 2, y: Math.max(80, h / 2 + 10) };
+}
+function placeCenterPin() {
+  const pin = $('centerPin');
+  show(pin, !!mode);
+  if (!mode) return;
+  pin.style.top = `${pickCenter().y}px`;
+  pin.classList.toggle('next', mode === 'next');
+  $('centerPinMark').textContent = mode === 'next' ? '→' : 'P';
+  renderPickMeta();
+}
+function placeFab() { $('locate').style.bottom = `${sheetH() + 16}px`; }
+
+function renderPickMeta() {
+  if (!mode || !s) return;
+  const c = pickCenter();
+  const p = MapView.pointAt(c.x, c.y);
+  let label = '', value = '';
+  if (mode === 'change' && s.place) { label = '지금 만날 곳에서'; value = fmtM(meters(s.place, p)); }
+  else if (mode === 'first' && s.car) { label = `${nim()} 차에서`; value = fmtM(meters(s.car, p)); }
+  else if (mode === 'next' && me) { label = '내 위치에서'; value = fmtM(meters(me, p)); }
+  if (pinName) label = label ? `${pinName} · ${label}` : pinName; // 핀 자리 주소 (TMAP)
+  show('pickMeta', !!label);
+  $('pickMetaL').textContent = label;
+  $('pickMetaR').textContent = value;
+}
+MapView.onMove(() => { renderPickMeta(); lookupPinName(); });
+
+// 핀을 멈추면 그 자리 주소를 장소 이름 칸에 미리 채워 둔다 (직접 쓴 이름이 있으면 그대로)
+let pinName = '', pinTimer = null, pinSeq = 0;
+function lookupPinName() {
+  if (!mode || !Tmap.enabled) return;
+  clearTimeout(pinTimer);
+  pinTimer = setTimeout(async () => {
+    const c = pickCenter();
+    const p = MapView.pointAt(c.x, c.y);
+    const seq = ++pinSeq;
+    const r = await Tmap.get('address', { lat: p.lat.toFixed(6), lng: p.lng.toFixed(6) });
+    if (seq !== pinSeq || !mode) return;
+    // 검색으로 고른 곳에서 핀을 30m 넘게 옮기면, 자동으로 넣은 검색 이름은 지운다
+    if (picked && meters(picked, p) > 30) {
+      if ($('pickName').value === picked.name) $('pickName').value = '';
+      picked = null;
+    }
+    pinName = (r && r.name) || '';
+    $('pickName').placeholder = pinName ? `${pinName} (이름을 바꿔도 돼요)` : '장소 이름 (예: 후문 택시 승강장)';
+    renderPickMeta();
+  }, 600);
+}
+// ---------- 장소 검색 (TMAP 통합검색, 서버를 거쳐 호출) ----------
+// 글자를 멈추고 0.35초 뒤 검색 → 목록에서 고르면 그 장소 입구에 핀이 꽂히고 이름이 채워진다
+let searchTimer = null, searchSeq = 0, picked = null;
+function resetSearch() {
+  $('pickSearch').value = '';
+  $('pickResults').innerHTML = '';
+  show('pickResults', false);
+  show('pickSearchBox', Tmap.enabled);
+  picked = null;
+}
+function searchAround() { // 기준점: 내 위치 → 지금 핀 자리
+  if (me) return me;
+  const c = pickCenter();
+  return MapView.pointAt(c.x, c.y);
+}
+$('pickSearch').oninput = () => {
+  clearTimeout(searchTimer);
+  const q = $('pickSearch').value.trim();
+  if (q.length < 2) { show('pickResults', false); return; }
+  searchTimer = setTimeout(() => runSearch(q), 350);
+};
+$('pickSearch').onkeydown = (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const first = $('pickResults').querySelector('button');
+  if (first && !$('pickResults').classList.contains('hidden')) first.click();
+  else { clearTimeout(searchTimer); runSearch($('pickSearch').value.trim()); }
+};
+async function runSearch(q) {
+  if (q.length < 2) return;
+  const seq = ++searchSeq;
+  const at = searchAround();
+  const r = await Tmap.get('search', { q, lat: at.lat.toFixed(5), lng: at.lng.toFixed(5) });
+  if (seq !== searchSeq || !mode) return;
+  const list = (r && r.places) || [];
+  const box = $('pickResults');
+  box.innerHTML = list.length
+    ? list.map((p, i) => `<button data-i="${i}"><span class="t"><div class="n">${escapeHtml(p.name)}</div><div class="a">${escapeHtml(p.addr || '')}</div></span>${p.meters != null ? `<span class="d num">${fmtM(p.meters)}</span>` : ''}</button>`).join('')
+    : `<div class="empty">${r ? '검색 결과가 없어요. 다른 이름으로 찾아보세요' : '검색하지 못했어요. 잠시 후 다시 시도해 주세요'}</div>`;
+  box.querySelectorAll('button').forEach((b) => b.onclick = () => choosePlace(list[Number(b.dataset.i)]));
+  show(box, true);
+  placeCenterPin();
+}
+function choosePlace(p) {
+  picked = { name: p.name.slice(0, 30), lat: p.lat, lng: p.lng };
+  $('pickName').value = picked.name;
+  $('pickSearch').value = '';
+  $('pickSearch').blur();
+  show('pickResults', false);
+  // 목록이 닫혀 시트 높이가 바뀐 뒤에 핀 자리를 다시 계산해서 옮긴다
+  requestAnimationFrame(() => {
+    placeCenterPin();
+    MapView.panToPoint(shiftForSheet(picked));
+    // 코드로 옮기면 지도 이동 이벤트가 안 올 수 있어서 이름·거리를 직접 갱신
+    pinSeq++;
+    pinName = picked.name;
+    renderPickMeta();
+  });
+}
+
+MapView.onTap((p) => { if (mode) MapView.panToPoint(shiftForSheet(p)); });
+// 지도를 누른 곳이 가운데 핀 자리에 오도록 (시트 높이만큼 보정)
+function shiftForSheet(p) {
+  const c = pickCenter();
+  const mid = MapView.pointAt(window.innerWidth / 2, window.innerHeight / 2);
+  const pin = MapView.pointAt(c.x, c.y);
+  return { lat: p.lat + (mid.lat - pin.lat), lng: p.lng + (mid.lng - pin.lng) };
+}
+
+document.querySelectorAll('.pill').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('.pill').forEach((p) => p.classList.toggle('on', p === b));
+  const custom = b.dataset.msg === '';
+  pickMsg = b.dataset.msg;
+  show('pickMsg', custom);
+  if (custom) $('pickMsg').focus();
+  if (!$('pickName').value && !custom) $('pickName').placeholder = '장소 이름 (예: 후문 택시 승강장)';
+  placeCenterPin();
+});
+
+$('pickCancel').onclick = closePick;
+$('pickSend').onclick = async () => {
+  const c = pickCenter();
+  const p = MapView.pointAt(c.x, c.y);
+  const name = $('pickName').value.trim() || pinName || (mode === 'next' ? '탑승 후 목적지' : '지도에서 찍은 곳');
+  const message = (pickMsg || $('pickMsg').value).trim();
+  $('pickSend').disabled = true;
+  try {
+    if (mode === 'next') {
+      await post('next', { place: { name, lat: p.lat, lng: p.lng } });
+      toast('info', '목적지를 남겼어요', `타자마자 ${ro(name)} 안내해요`);
+    } else {
+      const r = await post('change', { place: { name, lat: p.lat, lng: p.lng }, message });
+      if (r && !r.applied) toast('info', '요청을 보냈어요', `${nimI()} 확인하면 알려 드릴게요`);
+    }
+    closePick();
+  } catch {
+    toast('warn', '보내지 못했어요', '잠시 후 다시 시도해 주세요');
+  } finally { $('pickSend').disabled = false; }
+};
+
+$('changeBtn').onclick = () => openPick('change');
+$('nextBtn').onclick = () => openPick('next');
+$('arrNextBtn').onclick = () => openPick('next');
+$('nextClear').onclick = async () => { await post('next', { place: null }).catch(() => {}); };
+$('leaveGo').onclick = () => { leaveSeen = true; sessionStorage.setItem(leaveKey, '1'); render(); toast('info', '좋아요, 지금 나가세요', `${s.place.name}에서 만나요`); };
+$('leaveMap').onclick = () => { leaveSeen = true; sessionStorage.setItem(leaveKey, '1'); render(); };
+
+$('introOk').onclick = () => {
+  introSeen = true;
+  try { localStorage.setItem(introKey, '1'); } catch { /* 저장소 막힘 */ }
+  show('intro', false);
+};
+
+$('locate').onclick = () => {
+  if (!navigator.geolocation) return toast('warn', '내 위치를 쓸 수 없어요', '이 브라우저는 위치를 지원하지 않아요');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { me = { lat: pos.coords.latitude, lng: pos.coords.longitude }; render(); MapView.flyTo(me, sheetH()); },
+    () => toast('warn', '내 위치를 가져올 수 없어요', location.protocol === 'https:' ? '위치 권한을 허용해 주세요' : 'https 주소에서만 쓸 수 있어요'),
+    { enableHighAccuracy: true, timeout: 8000 },
+  );
+};
+
+// ---------- 휴대폰 알림 (웹 푸시) ----------
+// "켜기"를 누르면 서버가 차 위치를 보고 나갈 타이밍·곧 도착·도착을 휴대폰 알림창으로 보낸다.
+// 다른 앱을 보거나 화면이 꺼져 있어도 온다 (https 필요, 아이폰은 홈 화면에 추가한 뒤 열어야 함).
+const pushFlag = `nowonna:${id}:push`;
+const pushOk = window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let pushReg = null, pushSub = null, pushSentLeave = null, pushBusy = false;
+const b64u = (x) => Uint8Array.from(atob(x.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((x.length + 3) % 4)), (c) => c.charCodeAt(0));
+const sameKey = (a, b) => a && a.byteLength === b.length && new Uint8Array(a).every((v, i) => v === b[i]);
+
+async function pushSubscribe() {
+  const r = await fetch(`/api/sessions/${id}/push`, { cache: 'no-store' });
+  if (!r.ok) throw new Error(r.status);
+  const key = b64u((await r.json()).key);
+  let sub = await pushReg.pushManager.getSubscription();
+  // 서버를 다시 켜면 서버 키가 바뀌므로, 키가 다르면 새로 구독
+  if (sub && !sameKey(sub.options && sub.options.applicationServerKey, key)) { await sub.unsubscribe().catch(() => {}); sub = null; }
+  if (!sub) sub = await pushReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+  pushSentLeave = s ? leaveBeforeSec() : null;
+  await post('push', { sub: sub.toJSON(), leaveSec: pushSentLeave });
+  pushSub = sub;
+  try { localStorage.setItem(pushFlag, '1'); } catch {}
+}
+async function pushInit() {
+  if (!pushOk) return render();
+  pushBusy = true; render(); // 준비하는 동안 "켜기"를 못 누르게 (두 번 구독 방지)
+  try {
+    pushReg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    // 이미 허용한 브라우저면 묻지 않고 이 픽업에도 바로 연결
+    let on = false;
+    try { on = localStorage.getItem(pushFlag) !== '0'; } catch {}
+    if (Notification.permission === 'granted' && on) await pushSubscribe();
+  } catch (e) { console.warn('알림 준비 실패', e); }
+  pushBusy = false; render();
+}
+$('pushBtn').onclick = async () => {
+  if (pushBusy) return;
+  if (pushSub) { // 끄기
+    pushBusy = true;
+    await post('push', { sub: pushSub.toJSON(), off: true }).catch(() => {});
+    pushSub = null; pushBusy = false;
+    try { localStorage.setItem(pushFlag, '0'); } catch {}
+    render();
+    return toast('ok', '알림을 껐어요', '화면 안 배너로만 알려 드려요');
+  }
+  // 권한 요청은 누른 순간 바로 해야 한다 (사파리)
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { render(); return toast('warn', '알림이 꺼져 있어요', '브라우저 설정에서 이 사이트 알림을 허용해 주세요'); }
+  pushBusy = true; render();
+  try {
+    if (!pushReg) { pushReg = await navigator.serviceWorker.register('/sw.js'); await navigator.serviceWorker.ready; }
+    await pushSubscribe();
+    toast('ok', '알림을 켰어요', '다른 화면을 봐도 휴대폰 알림으로 알려 드려요');
+  } catch (e) {
+    console.warn(e);
+    toast('warn', '알림을 켜지 못했어요', '잠시 후 다시 시도해 주세요');
+  }
+  pushBusy = false; render();
+};
+// "지금 나가면 딱 맞아요" 시점은 걸어서 걸리는 시간에 따라 바뀌니 서버에도 알려 준다
+function syncPushLeave() {
+  if (!pushSub || pushBusy || !s || s.state !== 'DRIVING') return;
+  const v = leaveBeforeSec();
+  if (pushSentLeave != null && Math.abs(v - pushSentLeave) < 15) return;
+  pushSentLeave = v;
+  post('push', { sub: pushSub.toJSON(), leaveSec: v }).catch(() => { pushSentLeave = null; });
+}
+function renderPush() {
+  const card = $('pushCard');
+  const ios = isIOS && !pushOk; // 아이폰 사파리: 홈 화면 앱으로 열어야 알림 가능
+  show(card, pushOk || ios || !window.isSecureContext);
+  card.classList.toggle('on', !!pushSub);
+  const denied = pushOk && Notification.permission === 'denied';
+  $('pushT').textContent = pushSub ? '휴대폰 알림 켜짐' : '휴대폰 알림 받기';
+  $('pushS').textContent = pushSub ? '다른 화면을 봐도 도착 전에 알려 드려요'
+    : ios ? '공유 → 홈 화면에 추가 후 열면 받을 수 있어요'
+    : !window.isSecureContext ? 'https 주소에서만 켤 수 있어요'
+    : denied ? '알림이 막혀 있어요 · 브라우저 설정에서 허용해 주세요'
+    : '다른 화면을 봐도 도착 전에 알려 드려요';
+  show('pushBtn', pushOk && !denied);
+  $('pushBtn').textContent = pushBusy ? '…' : pushSub ? '끄기' : '켜기';
+  $('pushBtn').className = pushSub ? 'link' : 'mini';
+}
+
+// ---------- W4 알림 ----------
+let toastTimer = null;
+function toast(kind, title, sub) {
+  const t = $('toast');
+  t.className = kind === 'ok' ? '' : kind;
+  $('toastT').textContent = title; $('toastS').textContent = sub || '';
+  requestAnimationFrame(() => t.classList.add('show'));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 5000);
+}
+function checkResolution() {
+  const r = s && s.lastResolution;
+  if (!r) return;
+  if (seenResolutionAt === null) { seenResolutionAt = r.at; return; } // 처음 열었을 때 지난 답은 건너뜀
+  if (r.at <= seenResolutionAt) return;
+  seenResolutionAt = r.at;
+  if (r.auto && r.first) toast('ok', '만날 곳을 정했어요', `${nim()} 차가 ${ro(r.place.name)} 출발해요`);
+  else if (r.auto) toast('ok', '만날 곳을 바꿨어요', `${nim()} 차 내비에 바로 반영됐어요`);
+  else if (r.accepted) toast('ok', `${nimI()} 변경을 수락했어요`, `내비 경로가 ${ro(r.place.name)} 바뀌었어요`);
+  else toast('warn', `${nimI()} 원래 장소를 유지했어요`, `${s.place ? s.place.name : '처음 장소'}에서 만나요`);
+}
+
+// ---------- 서버 ----------
+async function post(action, body) {
+  const r = await fetch(`/api/sessions/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+function receive(data) {
+  s = data;
+  if (s.now) skew = s.now - Date.now();
+  if (seenResolutionAt === null) seenResolutionAt = s.lastResolution ? s.lastResolution.at : 0;
+  else checkResolution();
+  render();
+}
+
+// 실시간 받기: 기본은 SSE(서버가 바뀔 때마다 밀어 줌).
+// SSE가 막히는 곳(Cloudflare 임시 터널, 일부 회사·통신사 프록시)에서는 소식이 끊기므로,
+// 4초 넘게 아무것도 안 오면 2초마다 서버에 직접 물어본다. SSE가 살아 있으면 묻지 않는다.
+let lastLive = 0;
+function startLive() {
+  const es = new EventSource(`/api/sessions/${id}/stream`);
+  es.onmessage = (e) => {
+    lastLive = Date.now();
+    receive(JSON.parse(e.data));
+    if (s.state === 'ENDED') es.close();
+  };
+  const poll = setInterval(async () => {
+    if (!s || s.state === 'ENDED') return clearInterval(poll);
+    if (Date.now() - lastLive < 4000) return;
+    const r = await fetch(`/api/sessions/${id}`, { cache: 'no-store' }).catch(() => null);
+    if (!r) return; // 잠깐 끊김: 다음 차례에 다시
+    if (r.ok) receive(await r.json());
+    else if (r.status === 404) { missing = true; clearInterval(poll); render(); }
+  }, 2000);
+}
+
+fetch(`/api/sessions/${id}?viewer=web`)
+  .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+  .then((d) => {
+    receive(d);
+    if (d.state !== 'ENDED') { startLive(); pushInit(); }
+  })
+  .catch(() => { missing = true; render(); });
+
+// 남은 시간·"○초 전"은 서버 소식이 없어도 흘러가게
+setInterval(() => { if (s && s.state !== 'ENDED' && !mode) render(); }, 2000);
+addEventListener('resize', () => { placeCenterPin(); placeFab(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+.DS_Store
+.idea/
+*.iml
+
+# 바탕화면 동기화(iCloud)가 만드는 복사본
+* 2.*
+
+# 비밀값 (TMAP 앱키 등)
+.env
+scripts/.blocklist
