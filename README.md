@@ -2,11 +2,40 @@
 
 **차가 알아서 알리고, 받는 사람은 링크 하나로 나와요.**
 
-나온나는 Pleos Connect 차량용 픽업 앱입니다. 운전자가 차량 화면에서 버튼 한 번으로 픽업을 공유하면, 받는 사람은 앱 설치 없이 링크 하나로 차의 실시간 위치와 도착 예정 시간을 봅니다. 만날 장소를 바꾸면 그 변경이 차량 내비게이션에 바로 반영되고, 도착·탑승은 차량 신호(기어·문)로 자동 감지되어 공유가 끝납니다.
+나온나는 Pleos Connect 차량용 픽업 앱입니다. 운전자가 차량 화면에서 버튼 한 번으로 픽업을 공유하면, 받는 사람은 앱 설치 없이 링크 하나로 차의 실시간 위치와 도착 예정 시간을 봅니다. 만날 장소를 바꾸면 그 변경이 차량 내비게이션에 바로 반영되고, 도착·탑승은 차량 신호(기어·문·계기판)로 자동 감지되어 공유가 끝납니다.
 
-> 현대자동차그룹 차량용 앱 개발 공모전 출품작
->
-> 처음 보신다면: [한눈에 보기](#한눈에-보기) → [실행해 보기](#실행해-보기-실제-차-없이) → 코드 구조는 [ARCHITECTURE.md](ARCHITECTURE.md)
+> 현대자동차그룹 차량용 앱 개발 공모전 출품작 · ▶ [시연 영상 보기](TODO_VIDEO_LINK)
+
+![차량 화면과 받는 사람 휴대폰 화면](assets/screenshots/01-overview.jpg)
+<sub>왼쪽: Pleos Connect 차량 화면 (공유 중 · 링크 확인 · 나갈 타이밍 알림 보냄) / 오른쪽: 받는 사람 휴대폰 웹 (앱 설치 없이 링크로 열기)</sub>
+
+**바로 가기:** [픽업 한 번의 흐름](#픽업-한-번의-흐름) · [심사 포인트](#심사-포인트) · [1분 만에 실행해 보기](#가장-빠르게-보기-1분-에뮬레이터-없이) · [코드 구조 (ARCHITECTURE.md)](ARCHITECTURE.md)
+
+---
+
+## 픽업 한 번의 흐름
+
+| ① 운전자: 픽업 시작 | ② 받는 사람이 장소 변경 제안 → 내비 위에서 한 번 탭 승인 |
+|---|---|
+| ![픽업 시작](assets/screenshots/02-car-start.jpg) | ![장소 변경 승인](assets/screenshots/03-change-request.jpg) |
+| 만날 곳 · 보낼 사람 · 권한을 버튼으로만 고르고 [공유하고 출발] | 10초 안에 답하지 않으면 원래 장소를 유지해 운전자가 화면에 매달리지 않아요 |
+
+| ③ 받는 사람: 나갈 타이밍 | ④ 도착 → 차를 바로 알아보기 | ⑤ 탑승 감지 → 공유 끝, 다음 목적지로 |
+|---|---|---|
+| <img src="assets/screenshots/04-leave-now.jpg" alt="지금 나오시면 딱 맞아요" width="220"> | ![도착](assets/screenshots/05-arrived.jpg) | ![탑승 후 안내](assets/screenshots/06-boarded.jpg) |
+| 차 도착 시간과 걸어서 걸리는 시간에 맞춰 "지금 나오시면 딱 맞아요" | 정차하면 자동으로 "도착했어요", 차종·색상·번호판·비상등까지 | 조수석 문이 열렸다 닫히면 위치 공유를 끝내고 기록을 지운 뒤, 받는 사람이 남긴 목적지로 안내할지 물어요 |
+
+---
+
+## 심사 포인트
+
+| 기준 | 나온나에서 | 근거 (코드) |
+|---|---|---|
+| **차량 특화** | 기어(P)·문(조수석·뒷문)·계기판 경고등(비상등)으로 도착·탑승·비상등을 **운전자 조작 없이** 감지. 장소가 바뀌면 Pleos 내비 경로를 바로 다시 설정 | [`CarSignals.kt`](nowonna/car-app/app/src/main/java/ai/nowonna/car/CarSignals.kt) — Vehicle SDK · NaviHelper SDK |
+| **주행 중 안전** | 주행 중엔 큰 버튼 한 번 탭만. 승인 카드는 10초 뒤 자동 유지, 설정은 기어 P일 때만. 차량은 **읽기만** 하고 제어하지 않음 | [`C3Screen.kt`](nowonna/car-app/app/src/main/java/ai/nowonna/car/C3Screen.kt), [`Pickup.kt`](nowonna/car-app/app/src/main/java/ai/nowonna/car/Pickup.kt) |
+| **쓰기 쉬움** | 받는 사람은 **앱 설치·가입 없이 링크 하나**. 장소 검색, 나갈 타이밍, 휴대폰 알림 | [`web/index.html`](nowonna/server-lite/web/index.html) |
+| **개인정보** | 16자리 무작위 링크 · 2시간 자동 만료 · 탑승하면 위치 즉시 삭제 · 차량 전용 비밀키 · 처리방침 페이지 | [`server.js`](nowonna/server-lite/server.js), [`privacy.html`](nowonna/server-lite/web/privacy.html) |
+| **바로 실행** | 외부 패키지 없는 Node 서버 + 테스트용 차량으로 1분 안에 전체 흐름 확인. 에뮬레이터용 모의 주행 내장 | [실행해 보기](#실행해-보기-실제-차-없이) |
 
 ---
 
@@ -71,26 +100,61 @@
 
 ## 실행해 보기 (실제 차 없이)
 
+### 준비물
+
+| 무엇 | 버전 | 어디에 |
+|---|---|---|
+| Node.js | 18 이상 (외부 패키지 설치 없음) | 서버 + 받는 사람 웹 |
+| JDK | 17 | 차량 앱 빌드 |
+| Android Studio + Android SDK | SDK 35, Pleos Connect 에뮬레이터 이미지 | 차량 앱 실행 |
+| TMAP 앱키 (선택) | [SK open API](https://openapi.sk.com) 가입 → 앱 만들기 → TMAP API 사용 신청 → 앱키 | 지도·경로·장소 검색. 없으면 개발용 지도로 열려요 |
+
+### 가장 빠르게 보기 (1분, 에뮬레이터 없이)
+
+차량 앱 대신 테스트용 차량(`sim-car.js`)을 써서 받는 사람 웹의 흐름을 끝까지 볼 수 있어요.
+```bash
+cd nowonna/server-lite
+node server.js            # 터미널 1: 서버 (http://localhost:8787)
+node sim-car.js           # 터미널 2: 테스트용 차량이 픽업을 시작하고 달려와요
+```
+터미널 2의 **`이 컴퓨터에서 열기 →`** 줄에 찍힌 `http://localhost:8787/p/…` 주소를 브라우저(휴대폰 크기 보기 추천)로 열면 다음이 차례로 나와요. 앱키가 없으면 차는 직선으로 달려와요.
+1. 안내 화면
+2. 차가 오는 지도
+3. 장소 바꾸기
+4. 나갈 타이밍
+5. 도착·비상등
+6. 탑승
+
 ### 1. 서버 + 받는 사람 웹
 ```bash
 cd nowonna/server-lite
 node server.js          # http://localhost:8787
 ```
-- **TMAP 지도**: `.env.example`을 `.env`로 복사하고 `TMAP_APP_KEY`에 SK open API 앱키를 넣으면 TMAP 지도·도로 경로선·장소 검색·핀 주소·도보 시간이 켜져요. 키가 없으면 개발용 지도(OpenStreetMap)로 열려요. `.env`는 git에 올라가지 않아요.
-- 차량 앱 없이 웹만 볼 때: `node sim-car.js [VIEW|SUGGEST|AUTO] [noplace]` (가짜 차가 도로를 따라 달려와요)
+- **TMAP 지도**: `.env.example`을 `.env`로 복사하고 `TMAP_APP_KEY`에 앱키를 넣으면 TMAP 지도·도로 경로선·장소 검색·핀 주소·도보 시간이 켜져요. 키가 없으면 개발용 지도(OpenStreetMap)로 열리고, 경로선·장소 검색은 빠져요. `.env`는 git에 올라가지 않아요.
+- 차량 앱 없이 웹만 볼 때: `node sim-car.js [VIEW|SUGGEST|AUTO] [noplace]` (테스트용 차량이 도로를 따라 달려와요)
 - 같은 와이파이의 휴대폰에서 열려면 링크의 `localhost` 대신 이 컴퓨터의 내부 IP를 쓰거나 `.env`의 `PUBLIC_URL`에 넣으세요. [내 위치]·휴대폰 알림은 https 주소에서만 됩니다.
 
 ### 2. Pleos Connect 에뮬레이터
 1. Android Studio → SDK Manager → SDK Update Sites 에 Pleos 이미지 주소 추가
    `https://nexus-playground.pleos.ai/repository/raw-releases/connect-avd/2.x/crp-arm64-sys-img.xml`
 2. API 34 Pleos Connect 이미지 설치 → Device Manager 에서 Automotive AVD 생성 (RAM 4GB, Cold boot)
+3. 에뮬레이터가 켜지면 **Pleos 내비 앱을 한 번 열어 주세요.** 내비가 떠 있어야 차량 앱이 현재 위치를 받습니다.
 
 ### 3. 차량 앱
+
+**빌드 없이 설치하기:** 저장소 [Releases](../../releases)의 `nowonna-demo.apk`를 받아 바로 설치할 수 있어요. 시연 버튼(모의 주행·변경 요청·도착·탑승)과 시연용 연락처가 들어 있는 시연용 빌드예요.
+```bash
+adb install -r --user 10 nowonna-demo.apk
+```
+
+**직접 빌드하기:**
 ```bash
 cd nowonna/car-app
-./gradlew installDebug   # JDK 17 필요 (Android Studio: Settings → Gradle JDK → 17)
+./gradlew assembleDebug   # JDK 17 필요 (Android Studio: Settings → Gradle JDK → 17)
+adb install -r --user 10 app/build/outputs/apk/debug/app-debug.apk
 ```
-- 에뮬레이터는 `http://10.0.2.2:8787` (이 컴퓨터의 server-lite)로 자동 연결됩니다.
+- Pleos Connect 에뮬레이터의 운전자 화면은 **사용자 10**이라 `--user 10`으로 설치해야 앱 목록에 나와요.
+- 에뮬레이터는 `http://10.0.2.2:8787` (이 컴퓨터의 server-lite)로 자동 연결됩니다. **서버를 먼저 켜 두세요.** 꺼져 있으면 공유할 때 "서버 연결 실패"가 떠요.
 - 배포 서버를 쓰려면 `car-app/gradle.properties` 에 `nowonna.serverUrl=https://…` 를 넣습니다. https 주소면 평문 통신은 자동으로 막힙니다.
 
 ### 4. 차량 조작 (Virtual Console)
